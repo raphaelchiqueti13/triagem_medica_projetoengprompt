@@ -34,29 +34,80 @@
             Atendimento rápido e seguro
         </div>
     </div>
+<script>
 
-    <script>
-        const form = document.getElementById('triagemForm');
+const form = document.getElementById('triagemForm');
+    const API_KEY = "AIzaSyAf5lUlg4lNFs5Wu9HI2ofeJGJR3wBykA0"; 
 
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Pequeno feedback visual para o usuário
+        const btn = form.querySelector('button');
+        const originalText = btn.innerText;
+        btn.innerText = "🤖 Agente analisando...";
+        btn.disabled = true;
 
-            const formData = new FormData(form);
+        const formData = new FormData(form);
+        const sintomas = formData.get('sintomas');
 
-            fetch(form.action, {
+        // O Agente toma a decisão de forma autônoma
+        const analise = await consultarAgente(sintomas);
+
+        if (analise.aprovado) {
+            // Se aprovado, ele aciona sua automação do Make (Entrega 2)
+            enviarParaMake(formData);
+        } else {
+            // Interação inteligente com a interface
+            alert("⚠️ MENSAGEM DO AGENTE: " + analise.mensagem);
+        }
+        
+        btn.innerText = originalText;
+        btn.disabled = false;
+    });
+
+    async function consultarAgente(texto) {
+        const url = `[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$){API_KEY}`;
+        
+        const prompt = `Você é um Agente de Triagem Médica. Analise: "${texto}". 
+        Se for vago (ex: "estou mal", "ajuda", "oi"), responda exatamente: {"aprovado": false, "mensagem": "Poderia detalhar melhor seus sintomas e há quanto tempo começaram para que eu valide sua triagem?"}. 
+        Se for um relato válido, responda: {"aprovado": true}.
+        IMPORTANTE: Responda APENAS o JSON puro, sem textos extras ou blocos de código.`;
+
+        try {
+            const response = await fetch(url, {
                 method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                alert("Triagem enviada com sucesso! Verifique seu e-mail em instantes.");
-                form.reset();
-            })
-            .catch(error => {
-                alert("Erro ao enviar. Verifique sua conexão.");
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
             });
-        });
-    </script>
+            const data = await response.json();
+            
+            // Limpa a resposta caso a IA coloque ```json ```
+            let rawText = data.candidates[0].content.parts[0].text;
+            let cleanJson = rawText.replace(/```json|```/g, "").trim();
+            
+            return JSON.parse(cleanJson);
+        } catch (error) {
+            console.error("Erro no Agente:", error);
+            // Fallback: em caso de erro na IA, deixa passar para o Make por segurança
+            return { aprovado: true }; 
+        }
+    }
 
+    function enviarParaMake(formData) {
+        fetch(form.action, {
+            method: 'POST',
+            body: formData
+        })
+        .then(() => {
+            alert("✅ Triagem validada pelo Agente e enviada ao ecossistema médico!");
+            form.reset();
+        })
+        .catch(() => alert("Erro ao conectar com o serviço de e-mail."));
+    }
+
+    </script>
+ 
 </body>
 
 </html>
