@@ -1,21 +1,18 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
-    <title>Sistema de Triagem Médica</title>
+    <title>Sistemas de Triagem Médica</title>
 </head>
-
 <body>
 
     <div class="container">
         <h1>Pré-Atendimento</h1>
 
-        <form id="triagemForm" action="https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l" method="POST">
+        <form id="triagemForm">
             <input type="text" name="nome" placeholder="Nome completo" required>
-
             <input type="number" name="idade" placeholder="Idade" required>
 
             <select name="prioridade">
@@ -25,89 +22,79 @@
                 <option>Alta</option>
             </select>
 
-            <textarea name="sintomas" placeholder="Descreva seus sintomas"></textarea>
+            <textarea name="sintomas" id="sintomasField" placeholder="Descreva seus sintomas" required></textarea>
 
-            <button type="submit">Enviar dados</button>
-        </form> 
-        
+            <button type="submit" id="btnEnviar">Enviar dados</button>
+        </form>
+
         <div class="footer">
             Atendimento rápido e seguro
         </div>
     </div>
-<script>
 
-const form = document.getElementById('triagemForm');
-    const API_KEY = "AIzaSyAf5lUlg4lNFs5Wu9HI2ofeJGJR3wBykA0"; 
-
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
+    <script>
+        const form = document.getElementById('triagemForm');
         
-        // Pequeno feedback visual para o usuário
-        const btn = form.querySelector('button');
-        const originalText = btn.innerText;
-        btn.innerText = "🤖 Agente analisando...";
-        btn.disabled = true;
+        // SUAS CONFIGURAÇÕES (IA + MAKE)
+        const API_KEY = "AIzaSyAf5lUlg4lNFs5Wu9HI2ofeJGJR3wBykA0"; 
+        const WEBHOOK_MAKE = "https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l";
 
-        const formData = new FormData(form);
-        const sintomas = formData.get('sintomas');
+        form.addEventListener('submit', async function(e) {
+            // IMPEDE O NAVEGADOR DE ABRIR A PÁGINA DO MAKE SOZINHO
+            e.preventDefault(); 
+            
+            const btn = document.getElementById('btnEnviar');
+            const sintomas = document.getElementById('sintomasField').value;
 
-        // O Agente toma a decisão de forma autônoma
-        const analise = await consultarAgente(sintomas);
+            btn.innerText = "🤖 AGENTE ANALISANDO...";
+            btn.disabled = true;
 
-        if (analise.aprovado) {
-            // Se aprovado, ele aciona sua automação do Make (Entrega 2)
-            enviarParaMake(formData);
-        } else {
-            // Interação inteligente com a interface
-            alert("⚠️ MENSAGEM DO AGENTE: " + analise.mensagem);
-        }
-        
-        btn.innerText = originalText;
-        btn.disabled = false;
-    });
+            try {
+                // 1. O AGENTE ANALISA OS SINTOMAS
+                const analise = await consultarAgente(sintomas);
 
-    async function consultarAgente(texto) {
-        const url = `[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$){API_KEY}`;
-        
-        const prompt = `Você é um Agente de Triagem Médica. Analise: "${texto}". 
-        Se for vago (ex: "estou mal", "ajuda", "oi"), responda exatamente: {"aprovado": false, "mensagem": "Poderia detalhar melhor seus sintomas e há quanto tempo começaram para que eu valide sua triagem?"}. 
-        Se for um relato válido, responda: {"aprovado": true}.
-        IMPORTANTE: Responda APENAS o JSON puro, sem textos extras ou blocos de código.`;
+                if (analise.aprovado) {
+                    // 2. SE APROVADO, O MAKE É ACIONADO AQUI
+                    const formData = new FormData(form);
+                    const response = await fetch(WEBHOOK_MAKE, {
+                        method: 'POST',
+                        body: formData
+                    });
 
-        try {
+                    if (response.ok) {
+                        alert("✅ Triagem VALIDADA e enviada para o Make com sucesso!");
+                        form.reset();
+                    }
+                } else {
+                    // 3. SE FOR "AJUDA" OU "SOCORRO", ELE BARRA AQUI
+                    alert("⚠️ MENSAGEM DO AGENTE IA:\n\n" + analise.mensagem);
+                }
+            } catch (err) {
+                console.error("Erro técnico:", err);
+                alert("Erro ao conectar com a IA. Tente novamente.");
+            } finally {
+                btn.innerText = "Enviar dados";
+                btn.disabled = false;
+            }
+        });
+
+        async function consultarAgente(texto) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+            
+            const prompt = `Você é um Agente Médico. Analise: "${texto}". Se for vago (ex: socorro, ajuda, oi), responda: {"aprovado": false, "mensagem": "Por favor, detalhe seus sintomas."}. Se for um relato válido, responda: {"aprovado": true}. Responda APENAS o JSON puro.`;
+
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
             });
+
             const data = await response.json();
-            
-            // Limpa a resposta caso a IA coloque ```json ```
             let rawText = data.candidates[0].content.parts[0].text;
-            let cleanJson = rawText.replace(/```json|```/g, "").trim();
+            let cleanJson = rawText.replace(/```json|```/gi, "").trim();
             
             return JSON.parse(cleanJson);
-        } catch (error) {
-            console.error("Erro no Agente:", error);
-            // Fallback: em caso de erro na IA, deixa passar para o Make por segurança
-            return { aprovado: true }; 
         }
-    }
-
-    function enviarParaMake(formData) {
-        fetch(form.action, {
-            method: 'POST',
-            body: formData
-        })
-        .then(() => {
-            alert("✅ Triagem validada pelo Agente e enviada ao ecossistema médico!");
-            form.reset();
-        })
-        .catch(() => alert("Erro ao conectar com o serviço de e-mail."));
-    }
-
     </script>
- 
 </body>
-
 </html>
