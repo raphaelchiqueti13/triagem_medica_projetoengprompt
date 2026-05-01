@@ -1,18 +1,21 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
-    <title>Sistemas de Triagem Médica</title>
+    <title>Sistema de Triagem Médica</title>
 </head>
+
 <body>
 
     <div class="container">
         <h1>Pré-Atendimento</h1>
 
-        <form id="triagemForm">
+        <form id="triagemForm" action="https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l" method="POST">
             <input type="text" name="nome" placeholder="Nome completo" required>
+
             <input type="number" name="idade" placeholder="Idade" required>
 
             <select name="prioridade">
@@ -22,11 +25,11 @@
                 <option>Alta</option>
             </select>
 
-            <textarea name="sintomas" id="sintomasField" placeholder="Descreva seus sintomas" required></textarea>
+            <textarea name="sintomas" placeholder="Descreva seus sintomas"></textarea>
 
-            <button type="submit" id="btnEnviar">Enviar dados</button>
-        </form>
-
+            <button type="submit">Enviar dados</button>
+        </form> 
+        
         <div class="footer">
             Atendimento rápido e seguro
         </div>
@@ -34,79 +37,26 @@
 
     <script>
         const form = document.getElementById('triagemForm');
-        
-        // CONFIGURAÇÕES
-        const API_KEY = "AIzaSyAf5lUlg4lNFs5Wu9HI2ofeJGJR3wBykA0"; 
-        const WEBHOOK_MAKE = "https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l";
 
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault(); // Impede o redirecionamento para a tela do Make
-            
-            const btn = document.getElementById('btnEnviar');
-            const sintomas = document.getElementById('sintomasField').value;
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-            btn.innerText = "🤖 AGENTE ANALISANDO...";
-            btn.disabled = true;
+            const formData = new FormData(form);
 
-            try {
-                // 1. O AGENTE ANALISA OS SINTOMAS
-                const analise = await consultarAgente(sintomas);
-
-                if (analise.aprovado) {
-                    // 2. ENVIO PARA O MAKE (Acontece por baixo dos panos)
-                    const formData = new FormData(form);
-                    const response = await fetch(WEBHOOK_MAKE, {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (response.ok) {
-                        alert("✅ Triagem VALIDADA e enviada com sucesso!");
-                        form.reset();
-                    }
-                } else {
-                    // 3. BARREIRA DA IA
-                    alert("⚠️ MENSAGEM DO AGENTE IA:\n\n" + analise.mensagem);
-                }
-            } catch (err) {
-                console.error("Erro técnico:", err);
-                alert("Erro ao processar. Tente novamente em instantes.");
-            } finally {
-                btn.innerText = "Enviar dados";
-                btn.disabled = false;
-            }
+            fetch(form.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                alert("Triagem enviada com sucesso! Verifique seu e-mail em instantes.");
+                form.reset();
+            })
+            .catch(error => {
+                alert("Erro ao enviar. Verifique sua conexão.");
+            });
         });
-
-        async function consultarAgente(texto) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-            
-            const prompt = `Você é um Agente de Triagem Médica. Analise: "${texto}". 
-            Se for vago (ex: "ajuda", "socorro", "oi"), responda exatamente: {"aprovado": false, "mensagem": "Por favor, detalhe seus sintomas."}. 
-            Se for válido, responda: {"aprovado": true}.
-            Responda apenas o JSON puro.`;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                });
-                
-                const data = await response.json();
-
-                // PROTEÇÃO CONTRA O ERRO 'UNDEFINED' DO CONSOLE
-                if (!data || !data.candidates || !data.candidates[0]) {
-                    return { aprovado: true }; // Libera o envio se a IA falhar
-                }
-
-                let rawText = data.candidates[0].content.parts[0].text;
-                let cleanJson = rawText.replace(/```json|```/gi, "").trim();
-                
-                return JSON.parse(cleanJson);
-            } catch (error) {
-                return { aprovado: true }; // Fallback para não travar o usuário
-            }
-        }
     </script>
+
 </body>
+
 </html>
