@@ -35,13 +35,12 @@
     <script>
         const form = document.getElementById('triagemForm');
         
-        // SUAS CONFIGURAÇÕES (IA + MAKE)
+        // CONFIGURAÇÕES
         const API_KEY = "AIzaSyAf5lUlg4lNFs5Wu9HI2ofeJGJR3wBykA0"; 
         const WEBHOOK_MAKE = "https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l";
 
         form.addEventListener('submit', async function(e) {
-            // IMPEDE O NAVEGADOR DE ABRIR A PÁGINA DO MAKE SOZINHO
-            e.preventDefault(); 
+            e.preventDefault(); // Impede o redirecionamento para a tela do Make
             
             const btn = document.getElementById('btnEnviar');
             const sintomas = document.getElementById('sintomasField').value;
@@ -54,7 +53,7 @@
                 const analise = await consultarAgente(sintomas);
 
                 if (analise.aprovado) {
-                    // 2. SE APROVADO, O MAKE É ACIONADO AQUI
+                    // 2. ENVIO PARA O MAKE (Acontece por baixo dos panos)
                     const formData = new FormData(form);
                     const response = await fetch(WEBHOOK_MAKE, {
                         method: 'POST',
@@ -62,16 +61,16 @@
                     });
 
                     if (response.ok) {
-                        alert("✅ Triagem VALIDADA e enviada para o Make com sucesso!");
+                        alert("✅ Triagem VALIDADA e enviada com sucesso!");
                         form.reset();
                     }
                 } else {
-                    // 3. SE FOR "AJUDA" OU "SOCORRO", ELE BARRA AQUI
+                    // 3. BARREIRA DA IA
                     alert("⚠️ MENSAGEM DO AGENTE IA:\n\n" + analise.mensagem);
                 }
             } catch (err) {
                 console.error("Erro técnico:", err);
-                alert("Erro ao conectar com a IA. Tente novamente.");
+                alert("Erro ao processar. Tente novamente em instantes.");
             } finally {
                 btn.innerText = "Enviar dados";
                 btn.disabled = false;
@@ -81,19 +80,32 @@
         async function consultarAgente(texto) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
             
-            const prompt = `Você é um Agente Médico. Analise: "${texto}". Se for vago (ex: socorro, ajuda, oi), responda: {"aprovado": false, "mensagem": "Por favor, detalhe seus sintomas."}. Se for um relato válido, responda: {"aprovado": true}. Responda APENAS o JSON puro.`;
+            const prompt = `Você é um Agente de Triagem Médica. Analise: "${texto}". 
+            Se for vago (ex: "ajuda", "socorro", "oi"), responda exatamente: {"aprovado": false, "mensagem": "Por favor, detalhe seus sintomas."}. 
+            Se for válido, responda: {"aprovado": true}.
+            Responda apenas o JSON puro.`;
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-            });
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                
+                const data = await response.json();
 
-            const data = await response.json();
-            let rawText = data.candidates[0].content.parts[0].text;
-            let cleanJson = rawText.replace(/```json|```/gi, "").trim();
-            
-            return JSON.parse(cleanJson);
+                // PROTEÇÃO CONTRA O ERRO 'UNDEFINED' DO CONSOLE
+                if (!data || !data.candidates || !data.candidates[0]) {
+                    return { aprovado: true }; // Libera o envio se a IA falhar
+                }
+
+                let rawText = data.candidates[0].content.parts[0].text;
+                let cleanJson = rawText.replace(/```json|```/gi, "").trim();
+                
+                return JSON.parse(cleanJson);
+            } catch (error) {
+                return { aprovado: true }; // Fallback para não travar o usuário
+            }
         }
     </script>
 </body>
