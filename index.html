@@ -1,21 +1,19 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
-    <title>Sistema de Triagem Médica</title>
+    <title>Sistemas de Triagem Médica</title>
 </head>
-
 <body>
 
     <div class="container">
         <h1>Pré-Atendimento</h1>
 
-        <form id="triagemForm" action="https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l" method="POST">
+        <!-- Removido o 'action' para o JavaScript controlar o envio -->
+        <form id="triagemForm">
             <input type="text" name="nome" placeholder="Nome completo" required>
-
             <input type="number" name="idade" placeholder="Idade" required>
 
             <select name="prioridade">
@@ -25,54 +23,96 @@
                 <option>Alta</option>
             </select>
 
-            <textarea name="sintomas" placeholder="Descreva seus sintomas"></textarea>
+            <textarea name="sintomas" placeholder="Descreva seus sintomas" required></textarea>
 
             <button type="submit">Enviar dados</button>
-        </form> 
-        
+        </form>
+
         <div class="footer">
             Atendimento rápido e seguro
         </div>
     </div>
-<script>
 
-async function consultarAgente(texto) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-    
-    const prompt = `Você é um Agente de Triagem Médica. Analise: "${texto}". 
-    Se for vago (ex: "ajuda", "oi", "socorro"), responda exatamente: {"aprovado": false, "mensagem": "Relato insuficiente. Por favor, detalhe seus sintomas."}. 
-    Se for válido, responda: {"aprovado": true}.
-    Responda apenas o JSON puro, sem blocos de código markdown.`;
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
+    <script>
+        const form = document.getElementById('triagemForm');
         
-        const data = await response.json();
+        // Configurações de Integração
+        const API_KEY = "AIzaSyAf5lUlg4lNFs5Wu9HI2ofeJGJR3wBykA0"; 
+        const WEBHOOK_MAKE = "https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l";
 
-        // Se a API retornar erro de cota ou chave
-        if (data.error) {
-            console.error("Erro da API:", data.error.message);
-            return { aprovado: true }; // Deixa passar para não travar o usuário
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btn = form.querySelector('button');
+            const originalText = btn.innerText;
+            btn.innerText = "🤖 AGENTE ANALISANDO...";
+            btn.disabled = true;
+
+            const formData = new FormData(form);
+            const sintomas = formData.get('sintomas');
+
+            try {
+                // 1. O Agente toma a decisão de forma autônoma antes de qualquer envio
+                const analise = await consultarAgente(sintomas);
+
+                if (analise.aprovado) {
+                    // 2. Se validado, ele envia para o Make (Entrega 2)
+                    await enviarParaMake(formData);
+                } else {
+                    // 3. Resposta inteligente se a IA barrar a entrada
+                    alert("⚠️ MENSAGEM DO AGENTE IA:\n\n" + analise.mensagem);
+                }
+            } catch (err) {
+                console.error("Erro no fluxo:", err);
+                alert("Erro ao processar triagem. Verifique sua conexão.");
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        async function consultarAgente(texto) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+            
+            const prompt = `Você é um Agente de Triagem Médica Rigoroso. 
+            Analise: "${texto}".
+            Regra 1: Se for vago (ex: "oi", "socorro", "ajuda", "dor"), retorne {"aprovado": false, "mensagem": "Relato muito curto. Por favor, detalhe seus sintomas."}.
+            Regra 2: Se for um relato clínico válido, retorne {"aprovado": true}.
+            Responda APENAS o JSON puro.`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.1 } 
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.error) throw new Error(data.error.message);
+
+            // CORREÇÃO DA REGEX: Limpeza segura do texto da IA
+            let rawText = data.candidates[0].content.parts[0].text;
+            let cleanJson = rawText.replace(/```json|```/gi, "").trim();
+            
+            return JSON.parse(cleanJson);
         }
 
-        let rawText = data.candidates[0].content.parts[0].text;
-        
-        // LIMPEZA TOTAL: Remove ```json e qualquer texto extra que a IA inventar
-        let cleanJson = rawText.replace(/```json|```|json/gi, "").trim();
-        
-        return JSON.parse(cleanJson);
-    } catch (error) {
-        console.error("Erro ao processar JSON:", error);
-        // Se a IA "engasgar", o sistema deixa passar por segurança (fallback)
-        return { aprovado: true }; 
-    }
-}
-    </script>
- 
-</body>
+        async function enviarParaMake(formData) {
+            const response = await fetch(WEBHOOK_MAKE, {
+                method: 'POST',
+                body: formData
+            });
 
+            if (response.ok) {
+                alert("✅ Triagem VALIDADA pelo Agente e enviada com sucesso!");
+                form.reset();
+            } else {
+                throw new Error("Erro no Make");
+            }
+        }
+    </script>
+</body>
 </html>
