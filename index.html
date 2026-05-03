@@ -1,21 +1,20 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
-    <title>Sistema de Triagem Médica</title>
+    <title>Sistemas de Triagem Médica</title>
 </head>
-
 <body>
 
     <div class="container">
         <h1>Pré-Atendimento</h1>
 
-        <form id="triagemForm" action="https://hook.us2.make.com/v98msujjcukq18sjaqq6t5ftrl7z1y4l" method="POST">
+        <form id="triagemForm">
             <input type="text" name="nome" placeholder="Nome completo" required>
-
+            <!-- NOVO CAMPO: E-mail do paciente -->
+            <input type="email" name="email_paciente" placeholder="Seu e-mail para receber o relatório" required>
             <input type="number" name="idade" placeholder="Idade" required>
 
             <select name="prioridade">
@@ -25,38 +24,88 @@
                 <option>Alta</option>
             </select>
 
-            <textarea name="sintomas" placeholder="Descreva seus sintomas"></textarea>
+            <textarea name="sintomas" id="sintomasField" placeholder="Descreva seus sintomas" required></textarea>
 
-            <button type="submit">Enviar dados</button>
-        </form> 
-        
+            <button type="submit" id="btnEnviar">Enviar dados</button>
+        </form>
+
         <div class="footer">
             Atendimento rápido e seguro
         </div>
     </div>
 
-    <script>
-        const form = document.getElementById('triagemForm');
+   <script>
+    const API_KEY = "AIzaSyAf5lUlg4lNFs5Wu9HI2ofeJGJR3wBykA0"; 
+    const WEBHOOK_MAKE = "https://hook.us2.make.com/nryvhc48g17xzy0jqov56fnr7vepahyh";
 
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
+    const form = document.getElementById('triagemForm');
 
-            const formData = new FormData(form);
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnEnviar');
+        const sintomas = document.getElementById('sintomasField').value;
 
-            fetch(form.action, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                alert("Triagem enviada com sucesso! Verifique seu e-mail em instantes.");
-                form.reset();
-            })
-            .catch(error => {
-                alert("Erro ao enviar. Verifique sua conexão.");
-            });
+        btn.innerText = "🤖 AGENTE ANALISANDO...";
+        btn.disabled = true;
+
+        try {
+            const analise = await consultarAgente(sintomas);
+
+            if (analise.aprovado) {
+                // Objeto atualizado com o campo de e-mail
+                const dadosParaEnviar = {
+                    nome: form.nome.value,
+                    email: form.email_paciente.value, // Enviando o e-mail coletado
+                    idade: form.idade.value,
+                    prioridade: form.prioridade.value,
+                    sintomas: sintomas
+                };
+
+                const response = await fetch(WEBHOOK_MAKE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dadosParaEnviar)
+                });
+
+                if (response.ok) {
+                    alert("✅ Triagem enviada! Verifique seu e-mail.");
+                    form.reset();
+                } else {
+                    alert("Erro no servidor do Make.");
+                }
+            } else {
+                alert("⚠️ MENSAGEM DO AGENTE IA:\n\n" + analise.mensagem);
+            }
+        } catch (err) {
+            console.error("ERRO DETALHADO:", err);
+            alert("Erro técnico. Verifique o Console.");
+        } finally {
+            btn.innerText = "Enviar dados";
+            btn.disabled = false;
+        }
+    });
+
+    async function consultarAgente(texto) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+        // PROMPT ATUALIZADO: Pedindo um resumo curto e direto
+        const prompt = `Analise clinicamente: "${texto}". 
+        Regra 1: Se for vago, responda {"aprovado": false, "mensagem": "Detalhe seus sintomas."}. 
+        Regra 2: Se for relato real, responda {"aprovado": true}. 
+        IMPORTANTE: No Make, configure a IA para gerar um resumo de no máximo 3 linhas. 
+        Responda APENAS JSON puro.`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
-    </script>
-
+        
+        const data = await response.json();
+        if (!data.candidates) return { aprovado: true };
+        
+        let rawText = data.candidates[0].content.parts[0].text;
+        return JSON.parse(rawText.replace(/```json|```/gi, "").trim());
+    }
+</script>
 </body>
-
 </html>
